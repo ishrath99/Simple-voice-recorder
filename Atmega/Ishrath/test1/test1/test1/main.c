@@ -20,13 +20,11 @@ int main(void)
 	
 	DDRC &= ~(1<<DDC0);   //select ADC0 as input
 	
-	//TCCR0A |= (1<<WGM00)|(1<<COM0A1)|(1<<WGM01)|(1<<CS00);    // initialize timer0 in PWM mode
-	
 	DDRB = 0b11111111;     //set portB as output
 	
     while (1) 
     {
-		ADCSRA = ADCSRA |= (1 << ADSC);  //// Start an ADC conversion 
+		ADCSRA = ADCSRA | (1 << ADSC);  //// Start an ADC conversion 
 		
 		// Wait until the ADSC bit has been cleared
 		while(ADCSRA & (1 << ADSC));
