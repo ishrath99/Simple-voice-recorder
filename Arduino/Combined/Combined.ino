@@ -1,20 +1,17 @@
 
-#include <MCP_DAC.h>
 #include <SD.h>
 #include <SPI.h>
-#include <LiquidCrystal.h>
+#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 #define pass (void)0
-#define SD_CSPin 4
-#define S_mode 5
-#define S_playorrec 6
-#define S_playnext 3
-#define Reset 2
-#define DACpin 10
+#define SD_CSPin 10
+#define S_mode 8
+#define S_playorrec 9
+#define S_playnext A3
+#define Reset A2
 
-MCP4921 myDAC;
-LiquidCrystal_I2C lcd(0x20, 16, 2);
+LiquidCrystal_I2C lcd(0x27, 16, 4);
 
 long int samplingFreq = 8000;            // sampling frequency= 8kHz
 long Delay = 1000000 / samplingFreq;      //sampling interval in microseconds
@@ -33,38 +30,19 @@ char exten[5] = ".txt";
 
 int file_numberp = 0;
 
-const int mic_pin = A0;
-
 
 void setup() {
   pinMode(S_playorrec, INPUT);
   pinMode(S_mode, INPUT);
   pinMode(S_playnext, INPUT);
   pinMode(Reset, INPUT);
-  pinMode(mic_pin, INPUT);
-  //pinMode(DACpin, OUTPUT);
+  DDRD= 255;
 
-  ADCSRA &= ~(1 << ADPS2);     //set ADC Prescaler Select Bits to 011
-  ADCSRA |= (1 << ADPS1);      // division factor = 8
-  ADCSRA |= (1 << ADPS0);
+  setupAnalogRead();
+  
+  state2 = digitalRead(S_mode);
 
-  //  TCCR2B &= ~(1<<WGM22);
-  //  TCCR2A |= (1<<WGM21);
-  //  TCCR2A &= ~(1<<WGM20);
-  //  TCCR2A |= (1<<COM2A1);
-  //  TCCR2A &= ~(1<<COM2A0);
-  //  TCCR2A |= (1<<COM2B1);
-  //  TCCR2A &= ~(1<<COM2B0);
-  //
-  //  TCCR2B |= (1<<CS22);
-  //  TCCR2B &= ~(1<<CS21);
-  //  TCCR2B &= ~(1<<CS20);
-
-  state2 = digitalRead(5);
-
-//  Serial.begin(9600);
-  SD.begin(SD_CSPin);
-  myDAC.begin(DACpin);
+  Serial.begin(9600);
 
   //intializing lcd
   lcd.init();
@@ -75,17 +53,13 @@ void setup() {
   lcd.clear();
 
   lcd.println("loading SD");
-  delay(500);
+  delay(1000); 
   if (!SD.begin(SD_CSPin)) {
     lcd.clear();
-    lcd.println("An Error!!");
-    delay(500);
+    lcd.println("SD Error");
+    delay(1000);
   }
-  while (!SD.begin(SD_CSPin)) {
-    lcd.clear();
-    lcd.print(".");
-    delay(500);
-  }
+
   File root = SD.open("/");
   fileCount = getFileCount(root);
   root.close();
@@ -125,7 +99,7 @@ void loop() {
       if (!myFile) {
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.println("file error!");
+        lcd.println("file error");
         delay(1000);
       }
       else {
@@ -150,10 +124,9 @@ void loop() {
           file_name[0] = '\0';
           break;
         }
-        int data = analogRead(mic_pin);
-        myFile.println(data);
+       
+        myFile.println(AnalogRead());
         t1 = micros();
-        //Serial.println(t1-t0);
         if (t1 - t0 < Delay) {
           delayMicroseconds(Delay + t0 - t1);
         }
@@ -202,10 +175,10 @@ void loop() {
             pass;
           } else {
             temp = testFile.readStringUntil('\n');
-            myDAC.analogWrite(temp.toInt());
+            PORTD= temp.toInt();         // 8 bit DAC input
             t1 = micros();
           }
-          //Serial.println(t1-t0);
+          //mataching the input sampling rate
           if (t1 - t0 < Delay) {
             delayMicroseconds(Delay + t0 - t1);
           }
@@ -256,4 +229,21 @@ void reset(File root) {
     SD.remove(entry.name());
     entry.close();
   }
+}
+
+void  setupAnalogRead(){
+  ADMUX |= (1<<REFS0)|(1<<ADLAR);   //VCC as reference & left justified ADC(8 bits) & select ADC0 as input
+  
+  ADCSRA |= (1<<ADEN)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0);    //enable ADC & set prescaler to 128 (16000000/128=125kHz)
+  
+  DDRC &= ~(1<<DDC0);   //select ADC0 as input
+}
+  
+int AnalogRead(){
+  ADCSRA = ADCSRA | (1 << ADSC);  //// Start an ADC conversion
+  
+  // Wait until the ADSC bit has been cleared
+  while(ADCSRA & (1 << ADSC));
+  
+  return ADCH;  
 }
